@@ -3,27 +3,50 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
+game_difficulty = 'Medium'
+
+difficulty_settings = {
+    'Easy':   {'opponent_speed': 0.01, 'super_duration': 10},
+    'Medium': {'opponent_speed': 0.05, 'super_duration': 5},
+    'Hard':   {'opponent_speed': 0.1, 'super_duration': 3},
+}
+
+def set_difficulty(key):
+    global game_difficulty
+    if key == b'1':
+        game_difficulty = 'Easy'
+    elif key == b'2':
+        game_difficulty = 'Medium'
+    elif key == b'3':
+        game_difficulty = 'Hard'
+
+def get_opponent_speed():
+    return difficulty_settings[game_difficulty]['opponent_speed']
 
 player_pos      = [0.0, -300.0, 0.0]
 player_rot      = 0.0
 player_fall_ang = 0.0
+
 life       = 5
 score      = 0
 game_over  = False
+
 ball_pos        = [0.0, 0.0, 0.0]
 ball_vel        = [0.0, 0.0, 0.0]
 has_ball        = False
 BALL_RADIUS     = 15.0
 KICK_SPEED      = 15.0
 pickup_cooldown = 0
+
 GRID_LENGTH = 600
 GOAL_WIDTH  = 400
 GOAL_LINE   = GRID_LENGTH
 goal_flag   = False
 goal_time   = 0.0
+
 enemies     = []
 ENEMY_COUNT = 5
-ENEMY_SPEED = 0.005
+
 camera_mode   = "third"
 camera_pos    = (0.0, 500.0, 500.0)
 fovY          = 120.0
@@ -37,6 +60,7 @@ def init_enemies():
         x = random.uniform(-GRID_LENGTH + 50, GRID_LENGTH - 50)
         y = random.uniform(  50,               GRID_LENGTH - 50)
         enemies.append({"pos": [x, y, 0.0]})
+
 init_enemies()
 
 def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
@@ -65,7 +89,6 @@ def draw_grid():
             glVertex3f(i+CELL_SIZE, j+CELL_SIZE, 0)
             glVertex3f(i, j+CELL_SIZE, 0)
             glEnd()
-    # center lines
     glColor3f(1,1,1)
     glLineWidth(2)
     glBegin(GL_LINES)
@@ -158,7 +181,7 @@ def draw_player_model():
         glPushMatrix()
         glTranslatef(off, 0, arm_z)
         glRotatef(90,1,0,0)
-        gluCylinder(quad, 4,4,30,12,1)
+        gluCylinder(quad,4,4,30,12,1)
         glPopMatrix()
     glColor3f(0,1,1)
     glPushMatrix()
@@ -181,7 +204,7 @@ def draw_enemy_model():
     for off in (-12,12):
         glPushMatrix()
         glTranslatef(off, 0, 0)
-        gluCylinder(quad, 5,2,50,12,1)
+        gluCylinder(quad,5,2,50,12,1)
         glPopMatrix()
     body = 40
     glPushMatrix()
@@ -239,11 +262,13 @@ def update_game():
     if pickup_cooldown > 0:
         pickup_cooldown -= 1
 
+    speed = get_opponent_speed()
     for e in enemies:
         dx, dy = ball_pos[0]-e['pos'][0], ball_pos[1]-e['pos'][1]
         d = math.hypot(dx,dy) or 1
-        e['pos'][0] += dx/d * ENEMY_SPEED
-        e['pos'][1] += dy/d * ENEMY_SPEED
+        e['pos'][0] += dx/d * speed
+        e['pos'][1] += dy/d * speed
+
         if math.hypot(e['pos'][0]-ball_pos[0], e['pos'][1]-ball_pos[1]) < BALL_RADIUS+20:
             game_over = True
             return
@@ -253,13 +278,14 @@ def update_game():
             if life <= 0:
                 game_over = True
             e['pos'] = [
-                random.uniform(-GRID_LENGTH, GRID_LENGTH),
-                random.uniform( 50, GRID_LENGTH), 0.0
+                random.uniform(-GRID_LENGTH,GRID_LENGTH),
+                random.uniform( 50, GRID_LENGTH),
+                0.0
             ]
 
     if has_ball:
-        ball_pos[0] = player_pos[0] + (PLAYER_RADIUS + BALL_RADIUS/2)*math.cos(math.radians(player_rot))
-        ball_pos[1] = player_pos[1] + (PLAYER_RADIUS + BALL_RADIUS/2)*math.sin(math.radians(player_rot))
+        ball_pos[0] = player_pos[0] + (PLAYER_RADIUS+BALL_RADIUS/2)*math.cos(math.radians(player_rot))
+        ball_pos[1] = player_pos[1] + (PLAYER_RADIUS+BALL_RADIUS/2)*math.sin(math.radians(player_rot))
     elif pickup_cooldown == 0:
         if math.hypot(player_pos[0]-ball_pos[0], player_pos[1]-ball_pos[1]) < PLAYER_RADIUS+BALL_RADIUS+10:
             has_ball = True
@@ -268,15 +294,15 @@ def update_game():
     if not has_ball:
         ball_pos[0] += ball_vel[0]
         ball_pos[1] += ball_vel[1]
-        half_goal = GOAL_WIDTH/2 - BALL_RADIUS
 
-        if ball_pos[1] > GOAL_LINE - BALL_RADIUS and abs(ball_pos[0]) < half_goal:
+        half_goal = GOAL_WIDTH/2 - BALL_RADIUS
+        if ball_pos[1] > GOAL_LINE-BALL_RADIUS and abs(ball_pos[0])<half_goal:
             score += 1
             goal_flag = True
             goal_time = time.time()
             ball_vel[:] = [0.0,0.0,0.0]
             return
-        if ball_pos[1] < -GOAL_LINE + BALL_RADIUS and abs(ball_pos[0]) < half_goal:
+        if ball_pos[1] < -GOAL_LINE+BALL_RADIUS and abs(ball_pos[0])<half_goal:
             score -= 1
             goal_flag = True
             goal_time = time.time()
@@ -284,23 +310,26 @@ def update_game():
             return
 
         max_c = GRID_LENGTH - BALL_RADIUS
-        if ball_pos[0] >  max_c:
+        if ball_pos[0]> max_c:
             ball_pos[0], ball_vel[0] = max_c, -ball_vel[0]
-        elif ball_pos[0] < -max_c:
-            ball_pos[0], ball_vel[0] = -max_c, -ball_vel[0]
-        if ball_pos[1] >  max_c and abs(ball_pos[0]) > half_goal:
+        elif ball_pos[0]<-max_c:
+            ball_pos[0], ball_vel[0] = -max_c,-ball_vel[0]
+        if ball_pos[1]> max_c and abs(ball_pos[0])>half_goal:
             ball_pos[1], ball_vel[1] = max_c, -ball_vel[1]
-        if ball_pos[1] < -max_c and abs(ball_pos[0]) > half_goal:
-            ball_pos[1], ball_vel[1] = -max_c, -ball_vel[1]
+        if ball_pos[1]<-max_c and abs(ball_pos[0])>half_goal:
+            ball_pos[1], ball_vel[1] = -max_c,-ball_vel[1]
 
-        ball_vel[0] *= 0.98
-        ball_vel[1] *= 0.98
-        if abs(ball_vel[0]) < 0.01: ball_vel[0] = 0.0
-        if abs(ball_vel[1]) < 0.01: ball_vel[1] = 0.0
+        ball_vel[0] *= 0.98; ball_vel[1] *= 0.98
+        if abs(ball_vel[0])<0.01: ball_vel[0] = 0.0
+        if abs(ball_vel[1])<0.01: ball_vel[1] = 0.0
 
 def keyboardListener(key, x, y):
     global player_pos, player_rot, life, game_over, player_fall_ang, score
     global ball_pos, has_ball
+    if key in (b'1', b'2', b'3'):
+        set_difficulty(key)
+        return
+
     if game_over and key == b'r':
         player_pos[:] = [0.0,-300.0,0.0]
         player_rot = 0.0
@@ -313,6 +342,7 @@ def keyboardListener(key, x, y):
         return
     if game_over:
         return
+
     k = key.decode().lower()
     if k == 'w':
         player_pos[0] += 10*math.cos(math.radians(player_rot))
@@ -371,9 +401,9 @@ def showScreen():
     draw_walls()
     draw_list = []
     def queue_draw(fn, pos):
-        dx = pos[0] - camera_pos[0]
-        dy = pos[1] - camera_pos[1]
-        dz = pos[2] - camera_pos[2]
+        dx = pos[0]-camera_pos[0]
+        dy = pos[1]-camera_pos[1]
+        dz = pos[2]-camera_pos[2]
         dist2 = dx*dx + dy*dy + dz*dz
         draw_list.append((dist2, fn))
 
@@ -386,10 +416,10 @@ def showScreen():
     for _, fn in sorted(draw_list, key=lambda x: -x[0]):
         fn()
     draw_text(10,770, f"Life: {life}  Score: {score}")
-    draw_text(10,750, f"Cooldown: {pickup_cooldown}  has_ball={has_ball}")
+    draw_text(10,750, f"CD: {pickup_cooldown}  Ball: {has_ball}")
+    draw_text(10,730, f"Difficulty: {game_difficulty} (1-Easy 2-Med 3-Hard)")
     if game_over:
         draw_text(400,400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
-
     glutSwapBuffers()
 
 def idle():
