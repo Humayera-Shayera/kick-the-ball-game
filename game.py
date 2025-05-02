@@ -3,6 +3,30 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
+game_state = {
+    "player_pos": [0.0, -300.0, 0.0],
+    "player_rot": 0.0,
+    "player_fall_ang": 0.0,
+    "ball_pos": [0.0, 0.0, 0.0],
+    "ball_vel": [0.0, 0.0, 0.0],
+    "has_ball": False,
+    "pickup_cooldown": 0,
+    "life": 5,
+    "score": 0,
+    "game_over": False,
+    "goal_flag": False,
+    "goal_time": 0.0,
+    "camera_mode": "third",
+    "camera_pos": (0.0, 500.0, 500.0),
+    "fovY": 120.0,
+    "game_difficulty": "Medium",
+    "missed": 0,
+    "goal_scored": False,
+    "ball_kicked": False,
+    "last_goal_time": 0,
+    "goal_timer_start": 0
+}
+
 from goal_feedback import draw_goal_feedback
 from game_stats import draw_game_stats
 from key_reminders import draw_key_reminders
@@ -10,6 +34,10 @@ from last_goal_time import draw_last_goal_time
 from game_difficulty_level import set_difficulty, get_opponent_speed, game_difficulty
 from game_over_restart import handle_restart_key, check_game_over
 from reset_game import reset_game
+from reset_game import reset_game
+from enemies import update_enemies, draw_enemies, init_enemies
+from movement_and_kicking import handle_keyboard, handle_mouse
+from view import setup_camera, draw_scene
 
 BALL_RADIUS     = 15.0
 KICK_SPEED      = 15.0
