@@ -3,51 +3,72 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
-game_state = {
-    "player_pos": [0.0, -300.0, 0.0],
-    "player_rot": 0.0,
-    "player_fall_ang": 0.0,
-    "ball_pos": [0.0, 0.0, 0.0],
-    "ball_vel": [0.0, 0.0, 0.0],
-    "has_ball": False,
-    "pickup_cooldown": 0,
-    "life": 5,
-    "score": 0,
-    "game_over": False,
-    "goal_flag": False,
-    "goal_time": 0.0,
-    "camera_mode": "third",
-    "camera_pos": (0.0, 500.0, 500.0),
-    "fovY": 120.0,
-    "game_difficulty": "Medium",
-    "missed": 0,
-    "goal_scored": False,
-    "ball_kicked": False,
-    "last_goal_time": 0,
-    "goal_timer_start": 0
+game_difficulty = 'Medium'
+
+difficulty_settings = {
+    'Easy':   {'opponent_speed': 0.01, 'super_duration': 10},
+    'Medium': {'opponent_speed': 0.05, 'super_duration': 5},
+    'Hard':   {'opponent_speed': 0.1, 'super_duration': 3},
 }
 
-from goal_feedback import draw_goal_feedback
-from game_stats import draw_game_stats
-from key_reminders import draw_key_reminders
-from last_goal_time import draw_last_goal_time
-from game_difficulty_level import set_difficulty, get_opponent_speed, game_difficulty
-from game_over_restart import handle_restart_key, check_game_over
-from reset_game import reset_game
-from reset_game import reset_game
-from enemies import update_enemies, draw_enemies, init_enemies
-from movement_and_kicking import handle_keyboard, handle_mouse
-from view import setup_camera, draw_scene
+def set_difficulty(key):
+    global game_difficulty
+    if key == b'1':
+        game_difficulty = 'Easy'
+    elif key == b'2':
+        game_difficulty = 'Medium'
+    elif key == b'3':
+        game_difficulty = 'Hard'
 
+def get_opponent_speed():
+    return difficulty_settings[game_difficulty]['opponent_speed']
+
+player_pos      = [0.0, -300.0, 0.0]
+player_rot      = 0.0
+player_fall_ang = 0.0
+combo_count = 0
+last_goal_time = 0  # Track the time of the last goal
+combo_active = False  # Flag to track if the combo streak is active
+goal_missed = False  # Flag to track missed goals
+
+life       = 5
+score      = 0
+game_over  = False
+
+ball_pos        = [0.0, 0.0, 0.0]
+ball_vel        = [0.0, 0.0, 0.0]
+has_ball        = False
 BALL_RADIUS     = 15.0
 KICK_SPEED      = 15.0
+pickup_cooldown = 0
 
 GRID_LENGTH = 600
 GOAL_WIDTH  = 400
 GOAL_LINE   = GRID_LENGTH
+goal_flag   = False
+goal_time   = 0.0  # Track time of last goal
 
+enemies     = []
+ENEMY_COUNT = 5
+
+camera_mode   = "third"
+camera_pos    = (0.0, 500.0, 500.0)
+fovY          = 120.0
 CELL_SIZE     = 100
 PLAYER_RADIUS = 30
+trail = []
+
+def update_trail():
+    trail.append(player_pos[:2])
+    if len(trail) > 55:
+        trail.pop(0)
+
+def draw_trail():
+    glColor3f(94, 64, 51)
+    glBegin(GL_LINE_STRIP)
+    for pos in trail:
+        glVertex3f(pos[0], pos[1], 1)
+    glEnd()
 
 def init_enemies():
     global enemies
@@ -237,7 +258,7 @@ def draw_ball():
 def update_game():
     global enemies, life, game_over, player_fall_ang
     global pickup_cooldown, has_ball, ball_pos, ball_vel
-    global goal_flag, goal_time, score
+    global goal_flag, goal_time, score, combo_count, combo_active, goal_missed
 
     if game_over:
         if player_fall_ang < 90:
@@ -246,14 +267,33 @@ def update_game():
 
     if goal_flag:
         if time.time() - goal_time >= 5.0:
-            ball_pos[:] = [0.0,0.0,0.0]
-            ball_vel[:] = [0.0,0.0,0.0]
+            ball_pos[:] = [0.0, 0.0, 0.0]
+            ball_vel[:] = [0.0, 0.0, 0.0]
             has_ball = False
             goal_flag = False
             player_pos[1] = -300.0
             init_enemies()
+
+            # If combo streak is active and no goal was missed, increment the combo count
+            if combo_active and not goal_missed:
+                combo_count += 1
+            else:
+                combo_active = True
+                combo_count = 1  # Start the combo streak
+                
+            # Reset the goal_missed flag since the combo streak is active after a goal
+            goal_missed = False
+            return
         else:
             return
+
+    # If no ball possession or missed a goal, reset the combo streak
+    if not has_ball and combo_active:
+        combo_active = False
+        combo_count = 0
+        goal_missed = True  # Mark that a goal was missed
+    
+    update_trail()
 
     if pickup_cooldown > 0:
         pickup_cooldown -= 1
@@ -295,13 +335,13 @@ def update_game():
         if ball_pos[1] > GOAL_LINE-BALL_RADIUS and abs(ball_pos[0])<half_goal:
             score += 1
             goal_flag = True
-            goal_time = time.time()
+            goal_time = time.time()  # Update the time of the goal
             ball_vel[:] = [0.0,0.0,0.0]
             return
         if ball_pos[1] < -GOAL_LINE+BALL_RADIUS and abs(ball_pos[0])<half_goal:
             score -= 1
             goal_flag = True
-            goal_time = time.time()
+            goal_time = time.time()  # Update the time of the goal
             ball_vel[:] = [0.0,0.0,0.0]
             return
 
@@ -321,7 +361,7 @@ def update_game():
 
 def keyboardListener(key, x, y):
     global player_pos, player_rot, life, game_over, player_fall_ang, score
-    global ball_pos, has_ball
+    global ball_pos, has_ball, combo_count, combo_active
     if key in (b'1', b'2', b'3'):
         set_difficulty(key)
         return
@@ -334,6 +374,7 @@ def keyboardListener(key, x, y):
         ball_pos[:] = [0.0,0.0,0.0]
         ball_vel[:] = [0.0,0.0,0.0]
         has_ball = False
+        combo_count, combo_active = 0, False
         init_enemies()
         return
     if game_over:
@@ -396,6 +437,7 @@ def showScreen():
     draw_grid()
     draw_walls()
     draw_list = []
+
     def queue_draw(fn, pos):
         dx = pos[0]-camera_pos[0]
         dy = pos[1]-camera_pos[1]
@@ -403,19 +445,29 @@ def showScreen():
         dist2 = dx*dx + dy*dy + dz*dz
         draw_list.append((dist2, fn))
 
-    queue_draw(draw_player, player_pos)
+    queue_draw(draw_trail, player_pos) 
+    queue_draw(draw_player, player_pos)  
     queue_draw(draw_goal_posts, [0, GRID_LENGTH, 100])
     queue_draw(draw_net,        [0, GRID_LENGTH, 100])
+    
     for e in enemies:
         queue_draw(lambda e=e: draw_enemy(e), e['pos'])
+    
     queue_draw(draw_ball, ball_pos)
     for _, fn in sorted(draw_list, key=lambda x: -x[0]):
         fn()
-    draw_text(10,770, f"Life: {life}  Score: {score}")
-    draw_text(10,750, f"CD: {pickup_cooldown}  Ball: {has_ball}")
-    draw_text(10,730, f"Difficulty: {game_difficulty} (1-Easy 2-Med 3-Hard)")
+    
+    draw_text(10, 770, f"Life: {life}  Score: {score}")
+    draw_text(10, 750, f"CD: {pickup_cooldown}  Ball: {has_ball}")
+    draw_text(10, 730, f"Difficulty: {game_difficulty} (1-Easy 2-Med 3-Hard)")
+
+    if goal_flag:
+        draw_text(10, 710, f"Last Goal Time: {goal_time:.2f} seconds")
+    draw_text(10, 690, f"Combo: {combo_count}")  
+
     if game_over:
-        draw_text(400,400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
+        draw_text(400, 400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
+    
     glutSwapBuffers()
 
 def idle():
@@ -426,7 +478,7 @@ def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
     glutInitWindowSize(1000,800)
-    glutCreateWindow(b" Kick the Ball")
+    glutCreateWindow(b"Bullet Frenzy Soccer")
     glutDisplayFunc(showScreen)
     glutKeyboardFunc(keyboardListener)
     glutSpecialFunc(specialKeyListener)
