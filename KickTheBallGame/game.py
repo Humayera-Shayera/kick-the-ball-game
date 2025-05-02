@@ -3,26 +3,6 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
-game_difficulty = 'Medium'
-
-difficulty_settings = {
-    'Easy':   {'opponent_speed': 0.01, 'super_duration': 10},
-    'Medium': {'opponent_speed': 0.05, 'super_duration': 5},
-    'Hard':   {'opponent_speed': 0.1, 'super_duration': 3},
-}
-
-def set_difficulty(key):
-    global game_difficulty
-    if key == b'1':
-        game_difficulty = 'Easy'
-    elif key == b'2':
-        game_difficulty = 'Medium'
-    elif key == b'3':
-        game_difficulty = 'Hard'
-
-def get_opponent_speed():
-    return difficulty_settings[game_difficulty]['opponent_speed']
-
 player_pos      = [0.0, -300.0, 0.0]
 player_rot      = 0.0
 player_fall_ang = 0.0
