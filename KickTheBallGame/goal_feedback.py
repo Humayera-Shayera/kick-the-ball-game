@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from OpenGL.GLUT import *
-from config import game_state
+from game import game_state
 
 def draw_goal_feedback():
     if game_state['ball_kicked']:
