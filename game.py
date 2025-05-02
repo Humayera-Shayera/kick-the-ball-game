@@ -3,7 +3,6 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
-from game import game_state
 from goal_feedback import draw_goal_feedback
 from game_stats import draw_game_stats
 from key_reminders import draw_key_reminders
