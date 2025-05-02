@@ -3,6 +3,8 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
 
+
+
 game_difficulty = 'Medium'
 
 difficulty_settings = {
@@ -460,11 +462,22 @@ def showScreen():
     draw_text(10, 770, f"Life: {life}  Score: {score}")
     draw_text(10, 750, f"CD: {pickup_cooldown}  Ball: {has_ball}")
     draw_text(10, 730, f"Difficulty: {game_difficulty} (1-Easy 2-Med 3-Hard)")
-
+    draw_text(10, 710, f"Last Goal Time: {goal_time:.2f} seconds")
+    draw_text(10, 690, f"Combo: {combo_count}")
+    draw_text(700, 20, "WASD: Move | LMB: Kick | RMB: Camera | R: Restart")
+    
     if goal_flag:
         draw_text(10, 710, f"Last Goal Time: {goal_time:.2f} seconds")
     draw_text(10, 690, f"Combo: {combo_count}")  
 
+    if game_over:
+        draw_text(400, 400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
+
+    # Goal feedback
+    if goal_flag:
+        draw_text(450, 400, "GOAL!", GLUT_BITMAP_TIMES_ROMAN_24)
+
+    # Game over message
     if game_over:
         draw_text(400, 400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
     
