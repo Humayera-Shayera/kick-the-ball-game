@@ -5,8 +5,8 @@ import time
 
 from config import init_game, restart_game
 from draw_components import draw_all_components
-from player_and_kick import handle_keys, handle_mouse, update_player_and_ball
-from stats import draw_stats, draw_key_reminders, draw_goal_feedback
+from movement_and_kicking import handle_keys, handle_mouse, update_player_and_ball
+from game_stats import draw_stats, draw_key_reminders, draw_goal_feedback
 from goal_and_feedback import check_goal_or_miss, check_collision
 
 # Window settings
