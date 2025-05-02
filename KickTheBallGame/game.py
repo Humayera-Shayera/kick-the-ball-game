@@ -2,12 +2,15 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
+
+from config import game_state
 from goal_feedback import draw_goal_feedback
 from game_stats import draw_game_stats
 from key_reminders import draw_key_reminders
 from last_goal_time import draw_last_goal_time
 from game_difficulty_level import set_difficulty, get_opponent_speed, game_difficulty
 from game_over_restart import handle_restart_key, check_game_over
+from reset_game import reset_game
 
 BALL_RADIUS     = 15.0
 KICK_SPEED      = 15.0
