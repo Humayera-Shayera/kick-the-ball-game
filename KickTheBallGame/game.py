@@ -9,33 +9,13 @@ from last_goal_time import draw_last_goal_time
 from game_difficulty_level import set_difficulty, get_opponent_speed, game_difficulty
 from game_over_restart import handle_restart_key, check_game_over
 
-player_pos      = [0.0, -300.0, 0.0]
-player_rot      = 0.0
-player_fall_ang = 0.0
-
-life       = 5
-score      = 0
-game_over  = False
-
-ball_pos        = [0.0, 0.0, 0.0]
-ball_vel        = [0.0, 0.0, 0.0]
-has_ball        = False
 BALL_RADIUS     = 15.0
 KICK_SPEED      = 15.0
-pickup_cooldown = 0
 
 GRID_LENGTH = 600
 GOAL_WIDTH  = 400
 GOAL_LINE   = GRID_LENGTH
-goal_flag   = False
-goal_time   = 0.0
 
-enemies     = []
-ENEMY_COUNT = 5
-
-camera_mode   = "third"
-camera_pos    = (0.0, 500.0, 500.0)
-fovY          = 120.0
 CELL_SIZE     = 100
 PLAYER_RADIUS = 30
 
