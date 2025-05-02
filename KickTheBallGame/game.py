@@ -2,6 +2,12 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
+from goal_feedback import draw_goal_feedback
+from game_stats import draw_game_stats
+from key_reminders import draw_key_reminders
+from last_goal_time import draw_last_goal_time
+from game_difficulty_level import set_difficulty, get_opponent_speed, game_difficulty
+from game_over_restart import handle_restart_key, check_game_over
 
 player_pos      = [0.0, -300.0, 0.0]
 player_rot      = 0.0
@@ -410,7 +416,7 @@ def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
     glutInitWindowSize(1000,800)
-    glutCreateWindow(b"Bullet Frenzy Soccer")
+    glutCreateWindow(b" Kick the Ball")
     glutDisplayFunc(showScreen)
     glutKeyboardFunc(keyboardListener)
     glutSpecialFunc(specialKeyListener)
