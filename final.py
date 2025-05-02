@@ -1,4 +1,4 @@
-from OpenGL.GL import * 
+from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import math, random, time
@@ -23,42 +23,32 @@ def set_difficulty(key):
 def get_opponent_speed():
     return difficulty_settings[game_difficulty]['opponent_speed']
 
-# Add stamina tracking
-game_state = {
-    'ball_kicked': False,
-    'goal_scored': False,
-    'stamina': 100.0,
-    'max_stamina': 100.0,
-}
-
-def update_stamina(is_moving):
-    if is_moving:
-        game_state["stamina"] = max(0, game_state["stamina"] - 0.5)
-    else:
-        game_state["stamina"] = min(game_state["max_stamina"], game_state["stamina"] + 0.3)
-
-def draw_stamina_bar():
-    glColor3f(0, 1, 0)
-    glBegin(GL_QUADS)
-    glVertex2f(10, 770)
-    glVertex2f(10 + (game_state["stamina"] / game_state["max_stamina"]) * 200, 770)
-    glVertex2f(10 + (game_state["stamina"] / game_state["max_stamina"]) * 200, 750)
-    glVertex2f(10, 750)
-    glEnd()
-
-# Player, Ball, and Other Game Variables
-player_pos = [0.0, -300.0, 0.0]
-player_rot = 0.0
+player_pos      = [0.0, -300.0, 0.0]
+player_rot      = 0.0
+player_fall_ang = 0.0
 combo_count = 0
-life = 5
-score = 0
-game_over = False
-ball_pos = [0.0, 0.0, 0.0]
-ball_vel = [0.0, 0.0, 0.0]
-has_ball = False
-goal_flag = False
-goal_time = 0.0
-enemies = []
+last_goal_time = 0
+combo_active = False
+goal_missed = False
+
+life       = 5
+score      = 0
+game_over  = False
+
+ball_pos        = [0.0, 0.0, 0.0]
+ball_vel        = [0.0, 0.0, 0.0]
+has_ball        = False
+BALL_RADIUS     = 15.0
+KICK_SPEED      = 15.0
+pickup_cooldown = 0
+
+GRID_LENGTH = 600
+GOAL_WIDTH  = 400
+GOAL_LINE   = GRID_LENGTH
+goal_flag   = False
+goal_time   = 0.0
+
+enemies     = []
 ENEMY_COUNT = 5
 
 camera_mode   = "third"
@@ -66,6 +56,38 @@ camera_pos    = (0.0, 500.0, 500.0)
 fovY          = 120.0
 CELL_SIZE     = 100
 PLAYER_RADIUS = 30
+trail = []
+
+game_state = {
+    'ball_kicked': False,
+    'goal_scored': False,
+    'stamina': 100.0,
+    'max_stamina': 100.0
+}
+
+cheat_mode = False
+cheat_message_time = 0
+
+superman_strength = False
+superman_start_time = 0
+
+turbo_mode = False
+normal_speed = 10
+turbo_speed = normal_speed
+turbo_increment = 0.1
+max_turbo_speed = 20.0
+
+invisible = False
+invisible_start_time = 0
+invisibility_duration = 10
+
+charging_towards_goal = False
+
+def update_stamina(is_moving):
+    if is_moving:
+        game_state["stamina"] = max(0, game_state["stamina"] - 0.5)
+    else:
+        game_state["stamina"] = min(game_state["max_stamina"], game_state["stamina"] + 0.3)
 
 def draw_goal_feedback():
     if game_state['ball_kicked']:
@@ -123,17 +145,17 @@ def draw_grid():
             glVertex3f(i+CELL_SIZE, j+CELL_SIZE, 0)
             glVertex3f(i, j+CELL_SIZE, 0)
             glEnd()
-    glColor3f(1,1,1)
-    glLineWidth(2)
-    glBegin(GL_LINES)
-    glVertex3f(-GRID_LENGTH,0,0)
-    glVertex3f( GRID_LENGTH,0,0)
-    glEnd()
-    glBegin(GL_LINE_LOOP)
-    for i in range(64):
-        ang = 2*math.pi*i/64
-        glVertex3f(100*math.cos(ang), 100*math.sin(ang), 0.1)
-    glEnd()
+        glColor3f(1,1,1)
+        glLineWidth(2)
+        glBegin(GL_LINES)
+        glVertex3f(-GRID_LENGTH,0,0)
+        glVertex3f( GRID_LENGTH,0,0)
+        glEnd()
+        glBegin(GL_LINE_LOOP)
+        for i in range(64):
+            ang = 2*math.pi*i/64
+            glVertex3f(100*math.cos(ang), 100*math.sin(ang), 0.1)
+        glEnd()
 
 def draw_walls():
     glColor3f(0,1,1)
@@ -294,7 +316,7 @@ def draw_invisibility_countdown():
 
 def charge_towards_goal():
     global player_pos, player_rot, ball_pos, enemies
-    goal_direction = math.radians(player_rot)  
+    goal_direction = math.radians(player_rot)
     player_pos[0] += 10 * math.cos(goal_direction)
     player_pos[1] += 10 * math.sin(goal_direction)
 
@@ -310,23 +332,137 @@ def charge_towards_goal():
         pickup_cooldown = 20
 
 def update_game():
-    global enemies, life, game_over
+    global enemies, life, game_over, player_fall_ang
     global pickup_cooldown, has_ball, ball_pos, ball_vel
-    global goal_flag, goal_time, score, combo_count, combo_active, goal_missed
-    is_moving = False
+    global goal_flag, goal_time, score, combo_count, combo_active, goal_missed, charging_towards_goal
+
     if game_over:
+        if player_fall_ang < 90:
+            player_fall_ang += 2
         return
 
-    # Update stamina
-    update_stamina(is_moving)
+    update_invisibility()
 
-    # Rest of your existing update logic
+    if goal_flag:
+        if time.time() - goal_time >= 5.0:
+            ball_pos[:] = [0.0, 0.0, 0.0]
+            ball_vel[:] = [0.0, 0.0, 0.0]
+            has_ball = False
+            goal_flag = False
+            player_pos[1] = -300.0
+            init_enemies()
+
+            if combo_active and not goal_missed:
+                combo_count += 1
+            else:
+                combo_active = True
+                combo_count = 1
+
+            goal_missed = False
+            game_state['ball_kicked'] = False
+            game_state['goal_scored'] = False
+
+            return
+        else:
+            return
+
+    if not has_ball and combo_active:
+        combo_active = False
+        combo_count = 0
+        goal_missed = True
+
+    update_trail()
+
+    if pickup_cooldown > 0:
+        pickup_cooldown -= 1
+
+    if charging_towards_goal:
+        charge_towards_goal()
+        if abs(player_pos[1] - GOAL_LINE) < 20:  # Check if player has reached the goal line
+            charging_towards_goal = False  # Stop charging after reaching goal
+            ball_vel[0] = 15 * math.cos(math.radians(player_rot))
+            ball_vel[1] = 15 * math.sin(math.radians(player_rot))
+            has_ball = False
+            pickup_cooldown = 20
+        return
+
+    speed = get_opponent_speed()
+    for e in enemies:
+        if invisible:
+            continue
+
+        dx, dy = ball_pos[0]-e['pos'][0], ball_pos[1]-e['pos'][1]
+        d = math.hypot(dx,dy) or 1
+        e['pos'][0] += dx/d * speed
+        e['pos'][1] += dy/d * speed
+
+        if math.hypot(e['pos'][0]-ball_pos[0], e['pos'][1]-ball_pos[1]) < BALL_RADIUS+20:
+            if cheat_mode:
+                e['falling'] = True
+                e['pos'][2] = -50
+            elif superman_strength:
+                continue
+            elif not invisible:
+                game_over = True
+
+        if math.hypot(player_pos[0]-e['pos'][0], player_pos[1]-e['pos'][1]) < 35:
+            if not superman_strength:
+                life -= 1
+            if life <= 0:
+                game_over = True
+            e['pos'] = [
+                random.uniform(-GRID_LENGTH,GRID_LENGTH),
+                random.uniform( 50, GRID_LENGTH),
+                0.0
+            ]
+
+    if has_ball:
+        ball_pos[0] = player_pos[0] + (PLAYER_RADIUS+BALL_RADIUS/2)*math.cos(math.radians(player_rot))
+        ball_pos[1] = player_pos[1] + (PLAYER_RADIUS+BALL_RADIUS/2)*math.sin(math.radians(player_rot))
+    elif pickup_cooldown == 0:
+        if math.hypot(player_pos[0]-ball_pos[0], player_pos[1]-ball_pos[1]) < PLAYER_RADIUS+BALL_RADIUS+10:
+            has_ball = True
+            ball_vel[:] = [0.0,0.0,0.0]
+
+    if not has_ball:
+        ball_pos[0] += ball_vel[0]
+        ball_pos[1] += ball_vel[1]
+
+        half_goal = GOAL_WIDTH/2 - BALL_RADIUS
+        if ball_pos[1] > GOAL_LINE-BALL_RADIUS and abs(ball_pos[0])<half_goal:
+            score += 1
+            goal_flag = True
+            goal_time = time.time()
+            ball_vel[:] = [0.0,0.0,0.0]
+            game_state['ball_kicked'] = True
+            game_state['goal_scored'] = True
+            return
+        if ball_pos[1] < -GOAL_LINE+BALL_RADIUS and abs(ball_pos[0])<half_goal:
+            score -= 1
+            goal_flag = True
+            goal_time = time.time()
+            ball_vel[:] = [0.0,0.0,0.0]
+            game_state['ball_kicked'] = True
+            game_state['goal_scored'] = False
+            return
+
+        max_c = GRID_LENGTH - BALL_RADIUS
+        if ball_pos[0]> max_c:
+            ball_pos[0], ball_vel[0] = max_c, -ball_vel[0]
+        elif ball_pos[0]<-max_c:
+            ball_pos[0], ball_vel[0] = -max_c,-ball_vel[0]
+        if ball_pos[1]> max_c and abs(ball_pos[0])>half_goal:
+            ball_pos[1], ball_vel[1] = max_c, -ball_vel[1]
+        if ball_pos[1]<-max_c and abs(ball_pos[0])>half_goal:
+            ball_pos[1], ball_vel[1] = -max_c,-ball_vel[1]
+
+        ball_vel[0] *= 0.98; ball_vel[1] *= 0.98
+        if abs(ball_vel[0])<0.01: ball_vel[0] = 0.0
+        if abs(ball_vel[1])<0.01: ball_vel[1] = 0.0
 
 def keyboardListener(key, x, y):
-    global player_pos, player_rot, charging_towards_goal, life, game_over
-    global ball_pos, has_ball, combo_count, combo_active, cheat_mode
-    global superman_strength, superman_start_time, turbo_mode, turbo_speed, turbo_increment
-    global invisible, invisible_start_time
+    global player_pos, player_rot, charging_towards_goal, life, game_over, player_fall_ang, score
+    global ball_pos, has_ball, combo_count, combo_active, cheat_mode, cheat_message_time, superman_strength, superman_start_time, turbo_mode, turbo_speed, turbo_increment, invisible, invisible_start_time
 
     if key == b'1':
         set_difficulty(key)
@@ -334,8 +470,18 @@ def keyboardListener(key, x, y):
 
     if game_over and key == b'r':
         print("Restarting the game...")
-        # Reset game state
-        game_state['stamina'] = game_state['max_stamina']
+        player_pos[:] = [0.0,-300.0,0.0]
+        player_rot = 0.0
+        life, score = 5, 0
+        game_over, player_fall_ang = False, 0.0
+        ball_pos[:] = [0.0,0.0,0.0]
+        ball_vel[:] = [0.0,0.0,0.0]
+        has_ball = False
+        combo_count, combo_active = 0, False
+        init_enemies()
+        game_state['ball_kicked'] = False
+        game_state['goal_scored'] = False
+        print("Game has been reset.")
         return
 
     if game_over:
@@ -345,24 +491,85 @@ def keyboardListener(key, x, y):
     if k == 'w':
         player_pos[0] += turbo_speed * math.cos(math.radians(player_rot))
         player_pos[1] += turbo_speed * math.sin(math.radians(player_rot))
-        is_moving = True
+        update_stamina(True)  # Player is moving
     elif k == 's':
         player_pos[0] -= turbo_speed * math.cos(math.radians(player_rot))
         player_pos[1] -= turbo_speed * math.sin(math.radians(player_rot))
-        is_moving = True
+        update_stamina(True)  # Player is moving
     elif k == 'a':
         player_rot += 5
+        update_stamina(False)  # Player is not moving
     elif k == 'd':
         player_rot -= 5
-    elif k == 'b':
-        charging_towards_goal = True
+        update_stamina(False)  # Player is not moving
+    elif k == 'c':
+        cheat_mode = not cheat_mode
+        cheat_message_time = time.time()  
+        print(f"Cheat mode {'activated' if cheat_mode else 'deactivated'}.")
+    elif k == 'p': 
+        superman_strength = True
+        superman_start_time = time.time()
+        print("Superman strength activated!")
+    elif k == 't': 
+        if turbo_mode:
+            turbo_mode = False
+            turbo_speed = normal_speed  
+            print("Turbo mode deactivated.")
+        else:
+            turbo_mode = True
+            turbo_speed = normal_speed  
+            print("Turbo mode activated.")
+    elif k == 'i': 
+        invisible = True
+        invisible_start_time = time.time()
+        print("Player is now invisible for 10 seconds.")
 
-    # Add the limit for player position so that it doesn't go beyond walls
+    elif k == 'b':
+        charging_towards_goal = True  # Start charging towards the goal
+
     lim = GRID_LENGTH - PLAYER_RADIUS
     player_pos[0] = max(-lim, min(lim, player_pos[0]))
     player_pos[1] = max(-lim, min(lim, player_pos[1]))
 
+def mouseListener(button, state, x, y):
+    global has_ball, ball_vel, camera_mode, pickup_cooldown, cheat_mode
+    if button == GLUT_LEFT_BUTTON and state == GLUT_DOWN and not game_over:
+        if has_ball:
+            kick_speed = KICK_SPEED * 5 if cheat_mode else KICK_SPEED
+            ball_vel[:] = [
+                kick_speed * math.cos(math.radians(player_rot)),
+                kick_speed * math.sin(math.radians(player_rot)), 0.0
+            ]
+            has_ball = False
+            pickup_cooldown = 20
+    elif button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
+        camera_mode = 'first' if camera_mode == 'third' else 'third'
+
+def specialKeyListener(key, x, y):
+    global camera_pos
+    cx, cy, cz = camera_pos
+    if key == GLUT_KEY_UP:    cy += 10
+    elif key == GLUT_KEY_DOWN: cy -= 10
+    elif key == GLUT_KEY_LEFT: cx -= 10
+    elif key == GLUT_KEY_RIGHT: cx += 10
+    camera_pos = (cx, cy, cz)
+
+def setupCamera():
+    glMatrixMode(GL_PROJECTION); glLoadIdentity()
+    gluPerspective(fovY, 1000/800, 0.1, 2000)
+    glMatrixMode(GL_MODELVIEW); glLoadIdentity()
+    if camera_mode == 'first':
+        ex = player_pos[0] + 50*math.cos(math.radians(player_rot))
+        ey = player_pos[1] + 50*math.sin(math.radians(player_rot))
+        lx = player_pos[0] + 150*math.cos(math.radians(player_rot))
+        ly = player_pos[1] + 150*math.sin(math.radians(player_rot))
+        gluLookAt(ex, ey, 100, lx, ly, 0, 0,0,1)
+    else:
+        gluLookAt(*camera_pos, 0,0,0, 0,0,1)
+
 def showScreen():
+    global superman_strength, superman_start_time, cheat_mode, cheat_message_time
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glViewport(0, 0, 1000, 800)
     setupCamera()
@@ -370,10 +577,17 @@ def showScreen():
     draw_walls()
     draw_list = []
 
-    # Queue the functions to be drawn
+    def queue_draw(fn, pos):
+        dx = pos[0] - camera_pos[0]
+        dy = pos[1] - camera_pos[1]
+        dz = pos[2] - camera_pos[2]
+        dist2 = dx*dx + dy*dy + dz*dz
+        draw_list.append((dist2, fn))
+
     queue_draw(draw_trail, player_pos)
     queue_draw(draw_player, player_pos)
     queue_draw(draw_goal_posts, [0, GRID_LENGTH, 100])
+    queue_draw(draw_net, [0, GRID_LENGTH, 100])
 
     for e in enemies:
         queue_draw(lambda e=e: draw_enemy(e), e['pos'])
@@ -382,16 +596,35 @@ def showScreen():
     for _, fn in sorted(draw_list, key=lambda x: -x[0]):
         fn()
 
-    # Draw the stamina bar
-    draw_stamina_bar()
-
-    # Existing text and game-over drawing
     draw_text(10, 770, f"Life: {life}  Score: {score}")
     draw_text(10, 750, f"CD: {pickup_cooldown}  Ball: {has_ball}")
     draw_text(10, 730, f"Difficulty: {game_difficulty} (1-Easy 2-Med 3-Hard)")
 
+    if goal_flag:
+        draw_text(10, 710, f"Last Goal Time: {goal_time:.2f} seconds")
+
+    draw_text(10, 690, f"Combo: {combo_count}")
+
+    draw_goal_feedback()
+
     if game_over:
         draw_text(400, 400, "GAME OVER - Press R to restart", GLUT_BITMAP_TIMES_ROMAN_24)
+
+    if superman_strength:
+        remaining_time = max(0, 30 - (time.time() - superman_start_time))
+        if remaining_time > 0:
+            draw_text(400, 500, f"Superman Strength: {remaining_time:.2f}s", GLUT_BITMAP_TIMES_ROMAN_24)
+        else:
+            superman_strength = False
+
+    if cheat_mode and time.time() - cheat_message_time <= 2:
+        draw_text(400, 550, "Cheat code C activated!", GLUT_BITMAP_TIMES_ROMAN_24)
+
+    if turbo_mode:
+        draw_text(400, 600, "Turbo Mode: Active", GLUT_BITMAP_TIMES_ROMAN_24)
+
+    if invisible:
+        draw_invisibility_countdown()
 
     glutSwapBuffers()
 
